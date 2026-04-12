@@ -1,0 +1,10 @@
+[package]
+name = "rs-find"
+version = "0.1.0"
+edition = "2024"
+
+[[bench]]
+name = "search_bench"
+harness = false
+
+[dependencies]
