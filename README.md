@@ -11,6 +11,22 @@ cargo run -- --path <query> <root>
 cargo run -- --ignore-case <query> <root>
 ```
 
+## Demo
+Run the demo script to search a small fixture tree committed in `demo/fixtures/`:
+
+```bash
+bash demo/run.sh
+```
+
+Or try the commands directly:
+
+```bash
+cargo run -- target demo/fixtures
+cargo run -- --path rs-find/architecture demo/fixtures
+cargo run -- --ignore-case BORROW demo/fixtures
+cargo run -- link demo/fixtures
+```
+
 ## Benchmarking
 The project includes a lightweight `cargo bench` entrypoint.
 
