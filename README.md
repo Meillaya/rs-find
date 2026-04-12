@@ -18,7 +18,6 @@ Run the demo script to search a small fixture tree committed in `demo/fixtures/`
 bash demo/run.sh
 ```
 
-![rs-find terminal demo](docs/assets/demo-terminal.png)
 
 Or try the commands directly:
 
