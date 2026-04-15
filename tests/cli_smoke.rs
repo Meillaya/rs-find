@@ -48,3 +48,39 @@ fn path_flag_changes_matching_semantics() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("target.txt"));
 }
+
+#[test]
+fn exclude_hidden_flag_skips_hidden_entries() {
+    let fixture = TestDir::new();
+    fixture.create_file(".hidden-target.txt", "hello");
+    fixture.create_file("visible-target.txt", "hello");
+
+    let output = Command::new(bin())
+        .arg("--exclude-hidden")
+        .arg("target")
+        .arg(fixture.path())
+        .output()
+        .expect("binary should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("visible-target.txt"));
+    assert!(!stdout.contains(".hidden-target.txt"));
+}
+
+#[test]
+fn cross_filesystems_flag_is_accepted() {
+    let fixture = TestDir::new();
+    fixture.create_file("alpha/target.txt", "hello");
+
+    let output = Command::new(bin())
+        .arg("--cross-filesystems")
+        .arg("target")
+        .arg(fixture.path())
+        .output()
+        .expect("binary should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("target.txt"));
+}

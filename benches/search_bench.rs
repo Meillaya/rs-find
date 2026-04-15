@@ -10,6 +10,8 @@ fn main() {
         }
     };
     let query = std::env::var("BENCH_QUERY").unwrap_or_else(|_| "rs".to_owned());
+    let cache_notes =
+        std::env::var("BENCH_CACHE_NOTES").unwrap_or_else(|_| "unspecified cache state".to_owned());
     let iterations = std::env::var("BENCH_ITERATIONS")
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
@@ -22,6 +24,7 @@ fn main() {
     println!("Benchmark root: {root}");
     println!("Benchmark query: {query}");
     println!("Iterations: {iterations}");
+    println!("Cache notes: {cache_notes}");
 
     let rs_find_times = run_command(iterations, || {
         let start = Instant::now();
@@ -35,8 +38,9 @@ fn main() {
         assert!(status.success(), "rs-find benchmark command failed");
         start.elapsed()
     });
+    let rs_find_median = median(&rs_find_times);
 
-    println!("rs-find median: {:.2?}", median(&rs_find_times));
+    println!("rs-find median: {:.2?}", rs_find_median);
 
     match Command::new("fd").arg("--version").status() {
         Ok(status) if status.success() => {
@@ -52,7 +56,12 @@ fn main() {
                 assert!(status.success(), "fd benchmark command failed");
                 start.elapsed()
             });
-            println!("fd median: {:.2?}", median(&fd_times));
+            let fd_median = median(&fd_times);
+            let ratio = rs_find_median.as_secs_f64() / fd_median.as_secs_f64();
+
+            println!("fd median: {:.2?}", fd_median);
+            println!("rs-find/fd ratio: {ratio:.2}x");
+            println!("Verdict: {}", verdict(ratio));
         }
         _ => println!("fd not installed; skipping comparison"),
     }
@@ -69,4 +78,14 @@ fn median(times: &[std::time::Duration]) -> std::time::Duration {
     let mut times = times.to_vec();
     times.sort();
     times[times.len() / 2]
+}
+
+fn verdict(ratio: f64) -> &'static str {
+    if ratio <= 1.5 {
+        "meets or beats the aggressive edge of the v1 target band"
+    } else if ratio <= 2.0 {
+        "within the documented v1 target band"
+    } else {
+        "outside the documented v1 target band"
+    }
 }

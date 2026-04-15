@@ -7,7 +7,7 @@ use crate::search::{
     SearchEngine, SearchQuery, SymlinkPolicy,
 };
 
-const USAGE: &str = "Usage: rs-find [--path] [--ignore-case] <query> <root>\n\nFlags:\n  --path         Match against the full path instead of just the file name\n  --ignore-case  Match case-insensitively\n  -h, --help     Show this help text";
+const USAGE: &str = "Usage: rs-find [--path] [--ignore-case] [--exclude-hidden] [--cross-filesystems] <query> <root>\n\nFlags:\n  --path               Match against the full path instead of just the file name\n  --ignore-case        Match case-insensitively\n  --exclude-hidden     Skip hidden files and directories\n  --cross-filesystems  Traverse beyond the root filesystem boundary\n  -h, --help           Show this help text";
 
 pub fn run<I, W, E>(args: I, stdout: &mut W, stderr: &mut E) -> u8
 where
@@ -42,6 +42,8 @@ where
 
     let mut match_target = MatchTarget::Name;
     let mut case_sensitivity = CaseSensitivity::Sensitive;
+    let mut hidden_policy = HiddenFilePolicy::Include;
+    let mut mount_boundary = MountBoundaryPolicy::StayOnRootFilesystem;
     let mut positional = Vec::new();
 
     for arg in args {
@@ -49,6 +51,8 @@ where
             "-h" | "--help" => return Ok(Command::Help),
             "--path" => match_target = MatchTarget::Path,
             "--ignore-case" => case_sensitivity = CaseSensitivity::Insensitive,
+            "--exclude-hidden" => hidden_policy = HiddenFilePolicy::Exclude,
+            "--cross-filesystems" => mount_boundary = MountBoundaryPolicy::CrossFilesystems,
             _ if arg.starts_with('-') => {
                 return Err(AppError::InvalidArguments(format!(
                     "unsupported flag: {arg}"
@@ -74,8 +78,8 @@ where
         pattern: positional.remove(0),
         match_target,
         case_sensitivity,
-        hidden_policy: HiddenFilePolicy::Include,
-        mount_boundary: MountBoundaryPolicy::StayOnRootFilesystem,
+        hidden_policy,
+        mount_boundary,
         symlink_policy: SymlinkPolicy::DoNotFollowDirectorySymlinks,
     }))
 }

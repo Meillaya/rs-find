@@ -2,13 +2,15 @@
 
 `rs-find` is a Linux-first Rust CLI file finder built as a systems-programming learning project. It stays scan-based in v1, but it keeps a minimal seam for a future indexed backend.
 
-rs-find performs recursive local filesystem search with default **name-only** matching, optional **full-path** matching via `--path`, optional case-insensitive matching via `--ignore-case`, an internal parallel scan backend, and a sequential reference path for deterministic correctness checks; its v1 filesystem policy does **not** follow directory symlinks, still reports matching symlink entries, includes hidden files by default, emits permission-denied paths as non-fatal stderr warnings, and stays on the root filesystem via device-ID boundary checks.
+rs-find performs recursive local filesystem search with default **name-only** matching, optional **full-path** matching via `--path`, optional case-insensitive matching via `--ignore-case`, explicit policy toggles via `--exclude-hidden` and `--cross-filesystems`, an internal parallel scan backend, and a sequential reference path for deterministic correctness checks; its v1 filesystem policy does **not** follow directory symlinks, still reports matching symlink entries, includes hidden files by default unless excluded, emits permission-denied paths as non-fatal stderr warnings, and stays on the root filesystem unless cross-filesystem traversal is enabled.
 
 ## Usage
 ```bash
 cargo run -- <query> <root>
 cargo run -- --path <query> <root>
 cargo run -- --ignore-case <query> <root>
+cargo run -- --exclude-hidden <query> <root>
+cargo run -- --cross-filesystems <query> <root>
 ```
 
 ## Demo
@@ -25,6 +27,7 @@ Or try the commands directly:
 cargo run -- target demo/fixtures
 cargo run -- --path rs-find/architecture demo/fixtures
 cargo run -- --ignore-case BORROW demo/fixtures
+cargo run -- --exclude-hidden target demo/fixtures
 cargo run -- link demo/fixtures
 ```
 
@@ -33,10 +36,12 @@ The project includes a lightweight `cargo bench` entrypoint.
 
 ```bash
 cargo build --release
-BENCH_ROOT=/usr BENCH_QUERY=lib cargo bench
+BENCH_ROOT=/usr BENCH_QUERY=lib BENCH_CACHE_NOTES="warm-ish cache after local dev run" cargo bench
 ```
 
-If `fd` is installed, the bench runner compares `rs-find` and `fd` on the same workload and prints median timings.
+If `fd` is installed, the bench runner compares `rs-find` and `fd` on the same workload, prints median timings, reports the `rs-find/fd` ratio, and emits a simple verdict against the documented v1 proximity band.
+
+Latest recorded benchmark evidence lives in [`docs/benchmark-evidence.md`](docs/benchmark-evidence.md).
 
 ## Verification
 ```bash

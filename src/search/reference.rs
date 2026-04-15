@@ -5,7 +5,7 @@ use crate::error::AppError;
 
 use super::engine::SearchEngine;
 use super::matcher;
-use super::query::{SearchQuery, SymlinkPolicy};
+use super::query::{HiddenFilePolicy, SearchQuery, SymlinkPolicy, path_is_hidden};
 use super::result::{FileTypeHint, NonFatalDiagnostic, SearchOutcome, SearchResult};
 use super::walker::device_is_within_boundary;
 
@@ -47,6 +47,11 @@ impl SearchEngine for ReferenceSearchEngine {
                 };
 
                 let path = entry.path();
+                if matches!(query.hidden_policy, HiddenFilePolicy::Exclude) && path_is_hidden(&path)
+                {
+                    continue;
+                }
+
                 let symlink_metadata = match fs::symlink_metadata(&path) {
                     Ok(metadata) => metadata,
                     Err(error) => {
@@ -86,7 +91,8 @@ impl SearchEngine for ReferenceSearchEngine {
                         }
                     };
 
-                    if device_is_within_boundary(root_device, metadata.dev()) {
+                    if device_is_within_boundary(query.mount_boundary, root_device, metadata.dev())
+                    {
                         stack.push(path);
                     }
                 }

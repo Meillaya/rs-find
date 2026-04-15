@@ -24,8 +24,8 @@ The reference implementation traverses the tree single-threaded using the same q
 - Directory symlinks are not followed in v1
 - Symlink entries themselves may still be reported if they match
 - Permission-denied directories are reported as non-fatal diagnostics
-- Hidden files are included by default
-- Mount-boundary enforcement uses device-ID checks so traversal stays on the root filesystem by default
+- Hidden files are included by default and can be excluded explicitly at query time
+- Mount-boundary enforcement uses device-ID checks so traversal stays on the root filesystem by default, with an explicit query-time override to cross filesystems
 - Output order favors traversal completion speed; deterministic normalized comparison is used in tests
 
 ## Why there is no platform layer yet

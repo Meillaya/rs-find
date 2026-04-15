@@ -155,6 +155,25 @@ fn hidden_files_are_included_by_default() {
 }
 
 #[test]
+fn hidden_files_can_be_excluded_explicitly() {
+    let fixture = TestDir::new();
+    fixture.create_file(".secret-target", "hello");
+    fixture.create_file("visible-target", "hello");
+
+    let mut query = make_query(fixture.path(), "target");
+    query.hidden_policy = HiddenFilePolicy::Exclude;
+
+    let engine = ParallelSearchEngine::new();
+    let outcome = engine.search(&query).expect("search should succeed");
+
+    let normalized = normalize_paths(outcome.results.iter().map(|result| result.path.as_path()));
+    assert_eq!(
+        normalized,
+        normalize_paths([fixture.path().join("visible-target")])
+    );
+}
+
+#[test]
 fn reference_and_parallel_engines_produce_equivalent_normalized_results() {
     let fixture = TestDir::new();
     fixture.create_file("one/target.txt", "hello");
@@ -162,6 +181,29 @@ fn reference_and_parallel_engines_produce_equivalent_normalized_results() {
     fixture.create_file("two/nested/nope.md", "hello");
 
     let query = make_query(fixture.path(), "target");
+    let parallel = ParallelSearchEngine::new()
+        .search(&query)
+        .expect("parallel search should succeed");
+    let reference = ReferenceSearchEngine
+        .search(&query)
+        .expect("reference search should succeed");
+
+    assert_eq!(
+        normalize_paths(parallel.results.iter().map(|result| result.path.as_path())),
+        normalize_paths(reference.results.iter().map(|result| result.path.as_path())),
+    );
+}
+
+#[test]
+fn reference_and_parallel_engines_remain_equivalent_under_explicit_policy_toggles() {
+    let fixture = TestDir::new();
+    fixture.create_file(".hidden-target", "hello");
+    fixture.create_file("visible-target", "hello");
+
+    let mut query = make_query(fixture.path(), "target");
+    query.hidden_policy = HiddenFilePolicy::Exclude;
+    query.mount_boundary = MountBoundaryPolicy::CrossFilesystems;
+
     let parallel = ParallelSearchEngine::new()
         .search(&query)
         .expect("parallel search should succeed");

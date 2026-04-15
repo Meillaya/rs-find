@@ -10,7 +10,9 @@ use std::thread;
 use crate::error::AppError;
 
 use super::matcher;
-use super::query::{SearchQuery, SymlinkPolicy};
+use super::query::{
+    HiddenFilePolicy, MountBoundaryPolicy, SearchQuery, SymlinkPolicy, path_is_hidden,
+};
 use super::result::{FileTypeHint, NonFatalDiagnostic, SearchOutcome, SearchResult};
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -168,6 +170,10 @@ fn scan_directory<F: FilesystemView>(
     };
 
     for path in entries {
+        if matches!(query.hidden_policy, HiddenFilePolicy::Exclude) && path_is_hidden(&path) {
+            continue;
+        }
+
         let symlink_metadata = match filesystem.symlink_metadata(&path) {
             Ok(metadata) => metadata,
             Err(message) => {
@@ -207,7 +213,7 @@ fn scan_directory<F: FilesystemView>(
                 }
             };
 
-            if device_is_within_boundary(root_device, metadata.device_id) {
+            if device_is_within_boundary(query.mount_boundary, root_device, metadata.device_id) {
                 scan.subdirectories.push(path);
             }
         }
@@ -287,8 +293,15 @@ impl WorkQueue {
     }
 }
 
-pub fn device_is_within_boundary(root_device: u64, candidate_device: u64) -> bool {
-    root_device == candidate_device
+pub fn device_is_within_boundary(
+    policy: MountBoundaryPolicy,
+    root_device: u64,
+    candidate_device: u64,
+) -> bool {
+    match policy {
+        MountBoundaryPolicy::StayOnRootFilesystem => root_device == candidate_device,
+        MountBoundaryPolicy::CrossFilesystems => true,
+    }
 }
 
 #[cfg(test)]
@@ -357,8 +370,25 @@ mod tests {
 
     #[test]
     fn device_boundary_rejects_other_devices() {
-        assert!(device_is_within_boundary(7, 7));
-        assert!(!device_is_within_boundary(7, 8));
+        assert!(device_is_within_boundary(
+            super::super::query::MountBoundaryPolicy::StayOnRootFilesystem,
+            7,
+            7
+        ));
+        assert!(!device_is_within_boundary(
+            super::super::query::MountBoundaryPolicy::StayOnRootFilesystem,
+            7,
+            8
+        ));
+    }
+
+    #[test]
+    fn cross_filesystem_policy_allows_other_devices() {
+        assert!(device_is_within_boundary(
+            super::super::query::MountBoundaryPolicy::CrossFilesystems,
+            7,
+            8
+        ));
     }
 
     #[test]
@@ -419,5 +449,83 @@ mod tests {
             normalize_paths(scan.results.iter().map(|result| result.path.as_path())),
             normalize_paths([matching_file])
         );
+    }
+
+    #[test]
+    fn scan_directory_skips_hidden_entries_when_policy_excludes_them() {
+        let root = PathBuf::from("/virtual-root");
+        let hidden_dir = root.join(".hidden-dir");
+        let hidden_file = root.join(".target-file.txt");
+        let visible_file = root.join("target-file.txt");
+
+        let fs = FakeFilesystem::default()
+            .with_directory(
+                root.clone(),
+                vec![
+                    hidden_dir.clone(),
+                    hidden_file.clone(),
+                    visible_file.clone(),
+                ],
+            )
+            .with_symlink_metadata(
+                hidden_dir.clone(),
+                MetadataSnapshot {
+                    kind: EntryKind::Directory,
+                    device_id: 7,
+                },
+            )
+            .with_symlink_metadata(
+                hidden_file.clone(),
+                MetadataSnapshot {
+                    kind: EntryKind::File,
+                    device_id: 7,
+                },
+            )
+            .with_symlink_metadata(
+                visible_file.clone(),
+                MetadataSnapshot {
+                    kind: EntryKind::File,
+                    device_id: 7,
+                },
+            );
+
+        let mut query = make_query(&root);
+        query.hidden_policy = super::super::query::HiddenFilePolicy::Exclude;
+
+        let scan = scan_directory(&fs, &root, 7, &query);
+        assert!(scan.subdirectories.is_empty());
+        assert_eq!(
+            normalize_paths(scan.results.iter().map(|result| result.path.as_path())),
+            normalize_paths([visible_file])
+        );
+    }
+
+    #[test]
+    fn scan_directory_enqueues_other_devices_when_policy_allows_crossing() {
+        let root = PathBuf::from("/virtual-root");
+        let other_device = root.join("other-device-dir");
+
+        let fs = FakeFilesystem::default()
+            .with_directory(root.clone(), vec![other_device.clone()])
+            .with_symlink_metadata(
+                other_device.clone(),
+                MetadataSnapshot {
+                    kind: EntryKind::Directory,
+                    device_id: 8,
+                },
+            )
+            .with_metadata(
+                other_device.clone(),
+                MetadataSnapshot {
+                    kind: EntryKind::Directory,
+                    device_id: 8,
+                },
+            );
+
+        let mut query = make_query(&root);
+        query.mount_boundary = super::super::query::MountBoundaryPolicy::CrossFilesystems;
+
+        let scan = scan_directory(&fs, &root, 7, &query);
+        assert_eq!(scan.subdirectories, vec![other_device]);
     }
 }
